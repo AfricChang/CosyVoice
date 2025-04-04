@@ -141,6 +141,13 @@ class CosyVoiceGUI(QMainWindow):
         model_group.setLayout(model_layout)
         main_layout.addWidget(model_group)
         
+        # 合成模式选择
+        mode_group = QGroupBox("合成模式")
+        mode_layout = QVBoxLayout()
+        mode_layout.setSpacing(10)  # 增加按钮间距
+        
+        self.mode_group = QButtonGroup()
+        
         # 合成文本输入
         text_group = QGroupBox("合成文本")
         text_layout = QVBoxLayout()
@@ -150,13 +157,6 @@ class CosyVoiceGUI(QMainWindow):
         text_layout.addWidget(self.text_edit)
         text_group.setLayout(text_layout)
         main_layout.addWidget(text_group)
-        
-        # 合成模式选择
-        mode_group = QGroupBox("合成模式")
-        mode_layout = QVBoxLayout()
-        mode_layout.setSpacing(10)  # 增加按钮间距
-        
-        self.mode_group = QButtonGroup()
         
         # 创建模式选择按钮并设置样式
         self.zero_shot_radio = QRadioButton("零样本声音克隆")
@@ -273,10 +273,24 @@ class CosyVoiceGUI(QMainWindow):
         self.stop_btn.clicked.connect(self.stop_audio)
         self.stop_btn.setEnabled(False)  # 初始禁用
         
+        self.open_output_dir_btn = QPushButton("打开输出目录")
+        self.open_output_dir_btn.clicked.connect(self.open_output_directory)
+        
         control_layout.addWidget(self.synthesize_btn)
         control_layout.addWidget(self.play_btn)
         control_layout.addWidget(self.stop_btn)
+        control_layout.addWidget(self.open_output_dir_btn)
         main_layout.addLayout(control_layout)
+        
+        # 合成日志输出
+        log_group = QGroupBox("合成日志")
+        log_layout = QVBoxLayout()
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setPlaceholderText("合成过程信息将在这里显示...")
+        log_layout.addWidget(self.log_text)
+        log_group.setLayout(log_layout)
+        main_layout.addWidget(log_group)
         
         # 状态栏
         self.statusBar = QStatusBar()
@@ -391,10 +405,14 @@ class CosyVoiceGUI(QMainWindow):
     def update_status(self, message):
         """更新状态栏信息"""
         self.statusBar.showMessage(message)
+        # 同时更新日志输出框
+        self.log_text.append(message)
         
     def show_error(self, error_message):
         """显示错误消息"""
-        self.statusBar.showMessage(f"错误: {error_message}")
+        error_msg = f"错误: {error_message}"
+        self.statusBar.showMessage(error_msg)
+        self.log_text.append(error_msg)
         QMessageBox.critical(self, "错误", error_message)
         self.synthesize_btn.setEnabled(True)
         
@@ -403,7 +421,9 @@ class CosyVoiceGUI(QMainWindow):
         self.current_audio_path = output_path
         self.synthesize_btn.setEnabled(True)
         self.play_btn.setEnabled(True)
-        self.statusBar.showMessage(f"合成完成! 输出文件: {output_path}")
+        finish_msg = f"合成完成! 输出文件: {output_path}"
+        self.statusBar.showMessage(finish_msg)
+        self.log_text.append(finish_msg)
         
         # 自动播放合成的语音
         self.play_audio()
@@ -439,6 +459,12 @@ class CosyVoiceGUI(QMainWindow):
             self.play_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
             self.statusBar.showMessage("播放完成")
+    
+    def open_output_directory(self):
+        """打开合成输出目录"""
+        output_dir = os.path.join(current_dir, "synthesis_outputs")
+        os.makedirs(output_dir, exist_ok=True)
+        os.startfile(output_dir)
             
     def closeEvent(self, event):
         """应用关闭时的处理"""
