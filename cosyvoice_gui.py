@@ -124,6 +124,7 @@ class CosyVoiceGUI(QMainWindow):
         # 主部件和布局
         main_widget = QWidget()
         main_layout = QVBoxLayout()
+        main_layout.setSpacing(15)  # 增加组件间距
         
         # 模型加载部分
         model_group = QGroupBox("模型设置")
@@ -152,18 +153,43 @@ class CosyVoiceGUI(QMainWindow):
         
         # 合成模式选择
         mode_group = QGroupBox("合成模式")
-        mode_layout = QHBoxLayout()
+        mode_layout = QVBoxLayout()
+        mode_layout.setSpacing(10)  # 增加按钮间距
         
         self.mode_group = QButtonGroup()
+        
+        # 创建模式选择按钮并设置样式
         self.zero_shot_radio = QRadioButton("零样本声音克隆")
         self.cross_lingual_radio = QRadioButton("跨语言声音克隆")
         self.instruct_radio = QRadioButton("指令控制语音合成")
+        
+        # 设置按钮样式
+        for radio in [self.zero_shot_radio, self.cross_lingual_radio, self.instruct_radio]:
+            radio.setStyleSheet("""
+                QRadioButton {
+                    font-size: 14px;
+                    padding: 8px;
+                    border: 2px solid #ddd;
+                    border-radius: 5px;
+                    background-color: #f5f5f5;
+                }
+                QRadioButton:checked {
+                    border-color: #4a90e2;
+                    background-color: #e3f2fd;
+                }
+                QRadioButton:hover {
+                    background-color: #e6e6e6;
+                }
+            """)
         
         self.zero_shot_radio.setChecked(True)
         
         self.mode_group.addButton(self.zero_shot_radio, 0)
         self.mode_group.addButton(self.cross_lingual_radio, 1)
         self.mode_group.addButton(self.instruct_radio, 2)
+        
+        # 添加模式切换信号处理
+        self.mode_group.buttonClicked.connect(self.on_mode_changed)
         
         mode_layout.addWidget(self.zero_shot_radio)
         mode_layout.addWidget(self.cross_lingual_radio)
@@ -175,6 +201,7 @@ class CosyVoiceGUI(QMainWindow):
         # 参考音频设置
         prompt_group = QGroupBox("参考音频设置")
         prompt_layout = QVBoxLayout()
+        prompt_layout.setSpacing(10)  # 增加控件间距
         
         prompt_file_layout = QHBoxLayout()
         self.prompt_file_edit = QLineEdit()
@@ -187,25 +214,54 @@ class CosyVoiceGUI(QMainWindow):
         prompt_layout.addLayout(prompt_file_layout)
         
         # 参考文本设置（零样本克隆模式下需要）
+        self.prompt_text_container = QWidget()
+        prompt_text_layout = QVBoxLayout()
         self.prompt_text_edit = QLineEdit()
         self.prompt_text_edit.setPlaceholderText("输入与参考音频对应的文本内容")
         self.prompt_text_edit.setText("希望你以后能够做的比我还好呦。")
-        prompt_layout.addWidget(QLabel("参考文本:"))
-        prompt_layout.addWidget(self.prompt_text_edit)
+        prompt_text_layout.addWidget(QLabel("参考文本:"))
+        prompt_text_layout.addWidget(self.prompt_text_edit)
+        self.prompt_text_container.setLayout(prompt_text_layout)
+        prompt_layout.addWidget(self.prompt_text_container)
         
         # 指令文本（指令模式下需要）
+        self.instruct_text_container = QWidget()
+        instruct_text_layout = QVBoxLayout()
         self.instruct_text_edit = QLineEdit()
         self.instruct_text_edit.setPlaceholderText("输入控制指令，如'用四川话说这句话'")
         self.instruct_text_edit.setText("用四川话说这句话")
-        prompt_layout.addWidget(QLabel("指令文本:"))
-        prompt_layout.addWidget(self.instruct_text_edit)
+        instruct_text_layout.addWidget(QLabel("指令文本:"))
+        instruct_text_layout.addWidget(self.instruct_text_edit)
+        self.instruct_text_container.setLayout(instruct_text_layout)
+        prompt_layout.addWidget(self.instruct_text_container)
+        
+        # 初始化显示状态
+        self.instruct_text_container.hide()
         
         prompt_group.setLayout(prompt_layout)
         main_layout.addWidget(prompt_group)
         
         # 控制按钮
         control_layout = QHBoxLayout()
+        control_layout.setSpacing(10)  # 增加按钮间距
+        
         self.synthesize_btn = QPushButton("开始合成")
+        self.synthesize_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 20px;
+                font-size: 14px;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #357abd;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """)
         self.synthesize_btn.clicked.connect(self.start_synthesis)
         self.synthesize_btn.setEnabled(False)  # 初始禁用，等模型加载成功后启用
         
@@ -388,6 +444,19 @@ class CosyVoiceGUI(QMainWindow):
         """应用关闭时的处理"""
         self.player.stop()
         event.accept()
+        
+    def on_mode_changed(self, button):
+        """处理合成模式切换"""
+        # 根据选择的模式显示/隐藏相关控件
+        if button == self.zero_shot_radio:
+            self.prompt_text_container.show()
+            self.instruct_text_container.hide()
+        elif button == self.cross_lingual_radio:
+            self.prompt_text_container.hide()
+            self.instruct_text_container.hide()
+        elif button == self.instruct_radio:
+            self.prompt_text_container.hide()
+            self.instruct_text_container.show()
 
 
 def main():
