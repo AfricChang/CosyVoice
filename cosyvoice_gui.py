@@ -533,8 +533,15 @@ class CosyVoiceGUI(QMainWindow):
         if not text:
             QMessageBox.warning(self, "警告", "请输入要合成的文本")
             return
-            
-        prompt_file = self.prompt_file_edit.text().strip()
+        if self.builtin_radio.isChecked:
+            selected_voice = self.builtin_combo.currentText()
+            voice_info = self.voice_mapping.get(selected_voice)
+            if voice_info:
+                prompt_file = os.path.join(os.path.dirname(__file__), "AudioSamples", voice_info['wav'])
+            prompt_text = self.prompt_text_edit.text().strip()
+        else:
+            prompt_file = self.prompt_file_edit.text().strip()
+
         if not prompt_file:
             QMessageBox.warning(self, "警告", "请选择参考音频文件")
             return
