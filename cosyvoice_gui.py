@@ -28,6 +28,39 @@ except ImportError as e:
     print("请确保已安装所有依赖项，包括modelscope, hyperpyyaml等")
     sys.exit(1)
 
+def process_text_by_lines(text):
+    """将文本按行分割，并组合成不超过150字的片段"""
+    segments = []
+    current_segment = ""
+    max_length = 150
+    
+    # 按行分割文本
+    lines = text.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:  # 跳过空行
+            continue
+            
+        # 如果添加当前行会超出长度限制
+        if len(current_segment) + len(line) + 1 > max_length:  # +1 是为了可能添加的换行符
+            if current_segment:
+                segments.append(current_segment)
+            current_segment = line
+        else:
+            # 如果不是第一行，添加换行符
+            if current_segment:
+                current_segment += "\n" + line
+            else:
+                current_segment = line
+    
+    # 添加最后一个段落
+    if current_segment:
+        segments.append(current_segment)
+        
+    return segments
+
+
 class SynthesisThread(QThread):
     """语音合成线程，防止界面卡死"""
     finished = pyqtSignal(str)  # 完成信号，携带生成的音频文件路径
@@ -60,31 +93,62 @@ class SynthesisThread(QThread):
             else:
                 prompt_speech_16k = None
                 
-            # 根据模式执行不同的合成方法
-            self.progress.emit("开始语音合成...")
+            # 将长文本分割成多个片段
+            text_segments = process_text_by_lines(self.text)
+            self.progress.emit(f"文本已分割为{len(text_segments)}个片段")
             
-            if self.mode == "zero_shot" and prompt_speech_16k is not None:
-                for i, result in enumerate(self.model.inference_zero_shot(
-                        self.text, self.prompt_text, prompt_speech_16k, stream=False)):
-                    if i == 0:
-                        self._save_audio(result['tts_speech'], self.output_path)
-                        break
-                        
-            elif self.mode == "cross_lingual" and prompt_speech_16k is not None:
-                for i, result in enumerate(self.model.inference_cross_lingual(
-                        self.text, prompt_speech_16k, stream=False)):
-                    if i == 0:
-                        self._save_audio(result['tts_speech'], self.output_path)
-                        break
-                        
-            elif self.mode == "instruct" and prompt_speech_16k is not None:
-                for i, result in enumerate(self.model.inference_instruct2(
-                        self.text, self.instruct_text, prompt_speech_16k, stream=False)):
-                    if i == 0:
-                        self._save_audio(result['tts_speech'], self.output_path)
-                        break
+            # 存储每个片段合成的音频
+            audio_segments = []
+            
+            # 根据模式执行不同的合成方法
+            for i, segment in enumerate(text_segments):
+                self.progress.emit(f"开始合成第{i+1}/{len(text_segments)}个片段: {segment[:30]}...")
+                
+                if self.mode == "zero_shot" and prompt_speech_16k is not None:
+                    for j, result in enumerate(self.model.inference_zero_shot(
+                            segment, self.prompt_text, prompt_speech_16k, stream=False)):
+                        if j == 0:
+                            audio_segments.append(result['tts_speech'])
+                            break
+                            
+                elif self.mode == "cross_lingual" and prompt_speech_16k is not None:
+                    for j, result in enumerate(self.model.inference_cross_lingual(
+                            segment, prompt_speech_16k, stream=False)):
+                        if j == 0:
+                            audio_segments.append(result['tts_speech'])
+                            break
+                            
+                elif self.mode == "instruct" and prompt_speech_16k is not None:
+                    for j, result in enumerate(self.model.inference_instruct2(
+                            segment, self.instruct_text, prompt_speech_16k, stream=False)):
+                        if j == 0:
+                            audio_segments.append(result['tts_speech'])
+                            break
+                else:
+                    self.error.emit(f"无法执行{self.mode}模式，请检查参数设置")
+                    return
+                
+                self.progress.emit(f"第{i+1}/{len(text_segments)}个片段合成完成")
+            
+            # 合并所有音频片段
+            if audio_segments:
+                self.progress.emit("正在合并所有音频片段...")
+                if len(audio_segments) == 1:
+                    combined_speech = audio_segments[0]
+                else:
+                    # 确保所有片段都是张量或都是numpy数组
+                    if isinstance(audio_segments[0], torch.Tensor):
+                        # 如果是张量，在时间维度上拼接
+                        combined_speech = torch.cat(audio_segments, dim=1 if len(audio_segments[0].shape) > 1 else 0)
+                    else:
+                        # 如果是numpy数组，在时间维度上拼接
+                        combined_speech = np.concatenate(audio_segments, axis=0)
+                
+                # 保存合并后的音频
+                self._save_audio(combined_speech, self.output_path)
+                self.progress.emit(f"已合并{len(audio_segments)}个音频片段")
             else:
-                self.error.emit(f"无法执行{self.mode}模式，请检查参数设置")
+                self.error.emit("没有生成任何音频片段")
                 return
                 
             self.progress.emit("语音合成完成!")
