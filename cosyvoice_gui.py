@@ -267,7 +267,7 @@ class CosyVoiceGUI(QMainWindow):
                 }
             """)
         
-        self.zero_shot_radio.setChecked(True)
+        self.cross_lingual_radio.setChecked(True)
         
         self.mode_group.addButton(self.zero_shot_radio, 0)
         self.mode_group.addButton(self.cross_lingual_radio, 1)
