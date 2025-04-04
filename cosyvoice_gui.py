@@ -198,7 +198,7 @@ class CosyVoiceGUI(QMainWindow):
         self.current_audio_path = None
         self.player = QMediaPlayer()
         self.initUI()
-        self.load_model()
+        #self.load_model()
         
     def initUI(self):
         """初始化界面"""
@@ -213,8 +213,9 @@ class CosyVoiceGUI(QMainWindow):
         # 模型加载部分
         model_group = QGroupBox("模型设置")
         model_layout = QHBoxLayout()
-        
-        self.model_path_edit = QLineEdit("pretrained_models/CosyVoice2-0.5B")
+        modelFileDir = os.path.join(os.path.dirname(__file__), "pretrained_models/CosyVoice2-0.5B")
+
+        self.model_path_edit = QLineEdit(modelFileDir)
         model_layout.addWidget(QLabel("模型路径:"))
         model_layout.addWidget(self.model_path_edit)
         
@@ -535,7 +536,9 @@ class CosyVoiceGUI(QMainWindow):
         if not text:
             QMessageBox.warning(self, "警告", "请输入要合成的文本")
             return
-        if self.builtin_radio.isChecked:
+        prompt_text = ""
+        prompt_file = ""
+        if self.builtin_radio.isChecked():
             selected_voice = self.builtin_combo.currentText()
             voice_info = self.voice_mapping.get(selected_voice)
             if voice_info:
@@ -543,7 +546,10 @@ class CosyVoiceGUI(QMainWindow):
             prompt_text = self.prompt_text_edit.text().strip()
         else:
             prompt_file = self.prompt_file_edit.text().strip()
+            prompt_text = self.prompt_text_edit.text().strip()
 
+        print("prompt_text"+str(prompt_text))
+        print("prompt_file"+str(prompt_file))
         if not prompt_file:
             QMessageBox.warning(self, "警告", "请选择参考音频文件")
             return
@@ -701,5 +707,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print("loading model...")
     main()
