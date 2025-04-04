@@ -95,14 +95,19 @@ class SynthesisThread(QThread):
                 
             # 将长文本分割成多个片段
             text_segments = process_text_by_lines(self.text)
-            self.progress.emit(f"文本已分割为{len(text_segments)}个片段")
+            
+            # 显示更详细的分割信息
+            segment_info = "\n".join([f"片段{i+1}: 字符数{len(s)}" for i, s in enumerate(text_segments)])
+            self.progress.emit(f"文本已分割为{len(text_segments)}个片段:\n{segment_info}")
             
             # 存储每个片段合成的音频
             audio_segments = []
             
             # 根据模式执行不同的合成方法
             for i, segment in enumerate(text_segments):
-                self.progress.emit(f"开始合成第{i+1}/{len(text_segments)}个片段: {segment[:30]}...")
+                # 显示片段内容的前30个字符，但如果内容包含换行符，只显示第一行
+                display_text = segment.split('\n')[0] if '\n' in segment else segment[:30]
+                self.progress.emit(f"开始合成第{i+1}/{len(text_segments)}个片段: {display_text}...")
                 
                 if self.mode == "zero_shot" and prompt_speech_16k is not None:
                     for j, result in enumerate(self.model.inference_zero_shot(
@@ -127,12 +132,10 @@ class SynthesisThread(QThread):
                 else:
                     self.error.emit(f"无法执行{self.mode}模式，请检查参数设置")
                     return
-                
-                self.progress.emit(f"第{i+1}/{len(text_segments)}个片段合成完成")
-            
             # 合并所有音频片段
             if audio_segments:
                 self.progress.emit("正在合并所有音频片段...")
+                
                 if len(audio_segments) == 1:
                     combined_speech = audio_segments[0]
                 else:
@@ -144,9 +147,27 @@ class SynthesisThread(QThread):
                         # 如果是numpy数组，在时间维度上拼接
                         combined_speech = np.concatenate(audio_segments, axis=0)
                 
+                # 记录合并后的总长度
+                total_len = combined_speech.shape[-1] if isinstance(combined_speech, torch.Tensor) else len(combined_speech)
+                
+                # 检查合并后的音频数据是否有效
+                if total_len == 0:
+                    self.error.emit("错误: 合并后的音频长度为0，请检查音频片段")
+                    return
+                
                 # 保存合并后的音频
                 self._save_audio(combined_speech, self.output_path)
-                self.progress.emit(f"已合并{len(audio_segments)}个音频片段")
+                # 显示合并后的音频详细信息
+                if isinstance(combined_speech, torch.Tensor):
+                    samples = combined_speech.shape[-1]
+                else:
+                    samples = len(combined_speech)
+                duration = samples / self.model.sample_rate
+                
+                # 验证保存的音频文件
+                if not os.path.exists(self.output_path) or os.path.getsize(self.output_path) == 0:
+                    self.error.emit("错误: 保存的音频文件无效，请检查磁盘空间和权限")
+                    return
             else:
                 self.error.emit("没有生成任何音频片段")
                 return
@@ -467,15 +488,12 @@ class CosyVoiceGUI(QMainWindow):
         self.synthesis_thread.start()
         
     def update_status(self, message):
-        """更新状态栏信息"""
-        self.statusBar.showMessage(message)
-        # 同时更新日志输出框
+        """更新状态信息到日志输出框"""
         self.log_text.append(message)
         
     def show_error(self, error_message):
         """显示错误消息"""
         error_msg = f"错误: {error_message}"
-        self.statusBar.showMessage(error_msg)
         self.log_text.append(error_msg)
         QMessageBox.critical(self, "错误", error_message)
         self.synthesize_btn.setEnabled(True)
@@ -485,9 +503,6 @@ class CosyVoiceGUI(QMainWindow):
         self.current_audio_path = output_path
         self.synthesize_btn.setEnabled(True)
         self.play_btn.setEnabled(True)
-        finish_msg = f"合成完成! 输出文件: {output_path}"
-        self.statusBar.showMessage(finish_msg)
-        self.log_text.append(finish_msg)
         
         # 自动播放合成的语音
         self.play_audio()
