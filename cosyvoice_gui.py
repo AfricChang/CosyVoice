@@ -288,6 +288,57 @@ class CosyVoiceGUI(QMainWindow):
         prompt_layout = QVBoxLayout()
         prompt_layout.setSpacing(10)  # 增加控件间距
         
+        # 音频来源选择
+        source_layout = QHBoxLayout()
+        self.source_group = QButtonGroup()
+        
+        self.builtin_radio = QRadioButton("内置音色")
+        self.custom_radio = QRadioButton("自定义音频")
+        self.custom_radio.setChecked(True)
+        
+        self.source_group.addButton(self.builtin_radio, 0)
+        self.source_group.addButton(self.custom_radio, 1)
+        self.source_group.buttonClicked.connect(self.on_source_changed)
+        
+        source_layout.addWidget(QLabel("音频来源:"))
+        source_layout.addWidget(self.builtin_radio)
+        source_layout.addWidget(self.custom_radio)
+        prompt_layout.addLayout(source_layout)
+        
+        # 内置音色选择
+        self.builtin_container = QWidget()
+        builtin_layout = QHBoxLayout()
+        self.builtin_combo = QComboBox()
+        
+        # 扫描AudioSamples目录获取所有wav文件
+        audio_samples_dir = os.path.join(os.path.dirname(__file__), "AudioSamples")
+        wav_files = [f for f in os.listdir(audio_samples_dir) if f.endswith('.wav')]
+        
+        # 从文件名中提取音色名称（格式：数字_名字.wav）
+        voice_names = []
+        for wav_file in wav_files:
+            try:
+                # 提取名字部分（去掉数字和扩展名）
+                name_part = wav_file.split('_')[1].split('.')[0]
+                voice_names.append(name_part)
+            except IndexError:
+                continue
+        
+        # 去重并排序
+        voice_names = sorted(list(set(voice_names)))
+        
+        # 添加到下拉框
+        self.builtin_combo.addItems(voice_names)
+        builtin_layout.addWidget(QLabel("内置音色:"))
+        builtin_layout.addWidget(self.builtin_combo)
+        self.builtin_container.setLayout(builtin_layout)
+        self.builtin_container.hide()
+        prompt_layout.addWidget(self.builtin_container)
+        
+        # 自定义音频文件选择
+        self.custom_container = QWidget()
+        custom_layout = QVBoxLayout()
+        
         prompt_file_layout = QHBoxLayout()
         self.prompt_file_edit = QLineEdit()
         self.prompt_file_edit.setPlaceholderText("参考音频文件路径")
@@ -296,7 +347,7 @@ class CosyVoiceGUI(QMainWindow):
         prompt_file_layout.addWidget(QLabel("参考音频:"))
         prompt_file_layout.addWidget(self.prompt_file_edit)
         prompt_file_layout.addWidget(self.prompt_file_btn)
-        prompt_layout.addLayout(prompt_file_layout)
+        custom_layout.addLayout(prompt_file_layout)
         
         # 参考文本设置（零样本克隆模式下需要）
         self.prompt_text_container = QWidget()
@@ -307,7 +358,10 @@ class CosyVoiceGUI(QMainWindow):
         prompt_text_layout.addWidget(QLabel("参考文本:"))
         prompt_text_layout.addWidget(self.prompt_text_edit)
         self.prompt_text_container.setLayout(prompt_text_layout)
-        prompt_layout.addWidget(self.prompt_text_container)
+        custom_layout.addWidget(self.prompt_text_container)
+        
+        self.custom_container.setLayout(custom_layout)
+        prompt_layout.addWidget(self.custom_container)
         
         # 指令文本（指令模式下需要）
         self.instruct_text_container = QWidget()
@@ -420,6 +474,30 @@ class CosyVoiceGUI(QMainWindow):
         
         if file_path:
             self.prompt_file_edit.setText(file_path)
+            
+    def on_source_changed(self):
+        """处理音频来源切换"""
+        if self.builtin_radio.isChecked():
+            self.builtin_container.show()
+            self.custom_container.hide()
+            
+            # 自动填充内置音色的参考文本
+            voice_name = self.builtin_combo.currentText()
+            self.prompt_text_edit.setText(f"这是{voice_name}的参考文本。")
+            
+            # 设置内置音色文件路径（查找匹配的wav文件）
+            audio_file = None
+            for wav_file in os.listdir(os.path.join(os.path.dirname(__file__), "AudioSamples")):
+                if wav_file.endswith('.wav') and voice_name in wav_file:
+                    audio_file = os.path.join("AudioSamples", wav_file)
+                    break
+            self.prompt_file_edit.setText(audio_file)
+        else:
+            self.builtin_container.hide()
+            self.custom_container.show()
+            
+            # 清空自定义音频路径
+            self.prompt_file_edit.clear()
             
     def start_synthesis(self):
         """开始语音合成"""
