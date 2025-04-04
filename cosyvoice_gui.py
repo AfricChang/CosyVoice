@@ -372,6 +372,9 @@ class CosyVoiceGUI(QMainWindow):
         prompt_file_layout.addWidget(self.prompt_file_btn)
         custom_layout.addLayout(prompt_file_layout)
         
+        # 检查voice_mapping中是否存在"飞镜"
+        if "飞镜" in self.voice_mapping:
+            self.builtin_combo.setCurrentText("飞镜")
         # 参考文本设置（零样本克隆模式下需要）
         self.prompt_text_container = QWidget()
         prompt_text_layout = QVBoxLayout()
