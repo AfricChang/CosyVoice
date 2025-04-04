@@ -197,7 +197,6 @@ class CosyVoiceGUI(QMainWindow):
         self.model_loaded = False
         self.current_audio_path = None
         self.player = QMediaPlayer()
-        
         self.initUI()
         self.load_model()
         
@@ -702,4 +701,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print("loading model...")
     main()
