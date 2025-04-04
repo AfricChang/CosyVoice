@@ -310,16 +310,33 @@ class CosyVoiceGUI(QMainWindow):
         builtin_layout = QHBoxLayout()
         self.builtin_combo = QComboBox()
         
-        # 扫描AudioSamples目录获取所有wav文件
+        # 扫描AudioSamples目录获取所有wav文件和对应文本
         audio_samples_dir = os.path.join(os.path.dirname(__file__), "AudioSamples")
-        wav_files = [f for f in os.listdir(audio_samples_dir) if f.endswith('.wav')]
+        self.wav_files = [f for f in os.listdir(audio_samples_dir) if f.endswith('.wav')]
+        self.txt_files = [f for f in os.listdir(audio_samples_dir) if f.endswith('.txt')]
         
-        # 从文件名中提取音色名称（格式：数字_名字.wav）
+        # 创建音色名称到文件的映射
+        self.voice_mapping = {}
         voice_names = []
-        for wav_file in wav_files:
+        
+        for wav_file in self.wav_files:
             try:
                 # 提取名字部分（去掉数字和扩展名）
+                base_name = wav_file.split('.')[0]
                 name_part = wav_file.split('_')[1].split('.')[0]
+                
+                # 查找对应的txt文件
+                txt_file = f"{base_name}.txt"
+                if txt_file in self.txt_files:
+                    with open(os.path.join(audio_samples_dir, txt_file), 'r', encoding='utf-8') as f:
+                        prompt_text = f.read().strip()
+                else:
+                    prompt_text = ""
+                
+                self.voice_mapping[name_part] = {
+                    'wav': wav_file,
+                    'txt': prompt_text
+                }
                 voice_names.append(name_part)
             except IndexError:
                 continue
@@ -331,6 +348,12 @@ class CosyVoiceGUI(QMainWindow):
         self.builtin_combo.addItems(voice_names)
         builtin_layout.addWidget(QLabel("内置音色:"))
         builtin_layout.addWidget(self.builtin_combo)
+        
+        # 添加试听按钮
+        self.preview_btn = QPushButton("试听")
+        self.preview_btn.clicked.connect(self.preview_builtin_voice)
+        builtin_layout.addWidget(self.preview_btn)
+        
         self.builtin_container.setLayout(builtin_layout)
         self.builtin_container.hide()
         prompt_layout.addWidget(self.builtin_container)
@@ -481,17 +504,17 @@ class CosyVoiceGUI(QMainWindow):
             self.builtin_container.show()
             self.custom_container.hide()
             
-            # 自动填充内置音色的参考文本
-            voice_name = self.builtin_combo.currentText()
-            self.prompt_text_edit.setText(f"这是{voice_name}的参考文本。")
-            
-            # 设置内置音色文件路径（查找匹配的wav文件）
-            audio_file = None
-            for wav_file in os.listdir(os.path.join(os.path.dirname(__file__), "AudioSamples")):
-                if wav_file.endswith('.wav') and voice_name in wav_file:
-                    audio_file = os.path.join("AudioSamples", wav_file)
-                    break
-            self.prompt_file_edit.setText(audio_file)
+            # 自动设置参考文本
+            selected_voice = self.builtin_combo.currentText()
+            if selected_voice:
+                voice_info = self.voice_mapping.get(selected_voice)
+                if voice_info and voice_info['txt']:
+                    self.prompt_text_edit.setText(voice_info['txt'])
+                
+                # 设置内置音色文件路径
+                if voice_info:
+                    audio_file = os.path.join("AudioSamples", voice_info['wav'])
+                    self.prompt_file_edit.setText(audio_file)
         else:
             self.builtin_container.hide()
             self.custom_container.show()
@@ -586,22 +609,41 @@ class CosyVoiceGUI(QMainWindow):
         self.play_audio()
         
     def play_audio(self):
-        """播放合成的音频"""
+        """播放音频"""
         if not self.current_audio_path or not os.path.exists(self.current_audio_path):
             QMessageBox.warning(self, "警告", "没有可播放的音频文件")
             return
             
-        # 设置媒体播放器
-        url = QUrl.fromLocalFile(QFileInfo(self.current_audio_path).absoluteFilePath())
-        self.player.setMedia(QMediaContent(url))
+        self.player.setMedia(QMediaContent(QUrl.fromLocalFile(self.current_audio_path)))
         self.player.play()
-        
         self.play_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.statusBar.showMessage(f"正在播放: {self.current_audio_path}")
         
         # 播放结束后恢复按钮状态
         self.player.stateChanged.connect(self.player_state_changed)
+        
+    def preview_builtin_voice(self):
+        """试听内置音色"""
+        selected_voice = self.builtin_combo.currentText()
+        if not selected_voice:
+            return
+            
+        # 获取对应的音频文件
+        voice_info = self.voice_mapping.get(selected_voice)
+        if not voice_info:
+            QMessageBox.warning(self, "警告", f"未找到音色 {selected_voice} 的音频文件")
+            return
+            
+        audio_file = os.path.join(os.path.dirname(__file__), "AudioSamples", voice_info['wav'])
+        
+        # 播放音频
+        if os.path.exists(audio_file):
+            media = QMediaContent(QUrl.fromLocalFile(audio_file))
+            self.player.setMedia(media)
+            self.player.play()
+        else:
+            QMessageBox.warning(self, "警告", f"音频文件 {audio_file} 不存在")
         
     def stop_audio(self):
         """停止播放音频"""
